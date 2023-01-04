@@ -19,14 +19,23 @@
 
 ## Results 
 
-
 # Relevant Papers
 
 CYBORG: [CYBORG: Blending Human Saliency Into the Loss Improves Deep Learning](https://talk-to-boyd.com) (
 WACV 2023)
 
-Reactoin times: []
+Reaction times: [Measuring Human Perception to Improve Handwritten Document Transcription](https://arxiv.org/pdf/1904.03734.pdf) (TPAMI 2021)
 
+
+# Installing Necessary Dependencies
+
+You can install this in a pip environment 
+
+```
+python3 venv -m env
+source env/bin/activate
+pip3 install -r requirements.txt
+```
 
 # Running Code
 
@@ -75,3 +84,7 @@ CYBORG+REACTIONTIME:
   -T original_data \
   --cyborg-loss-alpha 0.5
 ```
+
+You can also run this with [WandB](https://wandb.ai/site). Most of this follows their [PyTorch-Lightning setup](https://docs.wandb.ai/guides/integrations/lightning).
+
+You can track your experiments by passing the flag `--use-wandb-logger true` to your run script. 
