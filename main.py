@@ -11,7 +11,7 @@ if __name__ == '__main__':
     from cyborg_rt.config import C
 
     parser = argparse.ArgumentParser(
-        description='Entry script to CYBORG-SAL experiments',
+        description='Entry script to CYBORG-RT experiments',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     # global config
@@ -29,7 +29,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '-L', '--loss', help='The name of the loss to use.',
         choices=['BCE', 'CE', 'CYBORG', 'CYBORG+REACTIONTIME', 
-                'REACTIONTIME', 'CYBORG+HARMONIZATION', 'SAL', 'CYBORG+SAL', 'SAL+CYBORG'],
+                'REACTIONTIME', 'CYBORG+HARMONIZATION'],
         default=config_dict.pop('LOSS'),
     )
     parser.add_argument(
@@ -37,13 +37,6 @@ if __name__ == '__main__':
         help='The sub-directory name of the training data.',
         choices=['original_data', '6x_data', '7x_data'],
         default=config_dict.pop('TRAIN_SPLIT'),
-    )
-    parser.add_argument(
-        '-S', '--sal-loss-method',
-        help='The salience map method used in the SAL loss.',
-        choices=['gradients', 'integrated_gradients', 'deep_lift',
-                 'gradient_shap', 'deep_shap', 'smooth_grad', 'annotations'],
-        default=config_dict.pop('SAL_LOSS_METHOD'),
     )
     parser.add_argument(
         '--debug', type=bool,
@@ -55,18 +48,6 @@ if __name__ == '__main__':
         help='Whether to use random reaction times instead of measurements from human data.',
         choices=['random', 'normal'],
         default=config_dict.pop('USE_RANDOM_REACTIONTIME'),
-    )
-    parser.add_argument(
-        '--sal-loss-mask-type',
-        help='The SAL loss mask type used in masking least important features.',
-        choices=['random', 'constant+noise', 'constant', 'border', 'mean'],
-        default=config_dict.pop('SAL_LOSS_MASK_TYPE'),
-    )
-    parser.add_argument(
-        '--sal-loss-k-strategy',
-        help='The SAL loss strategy for picking k.',
-        choices=['percent', 'zero'],
-        default=config_dict.pop('SAL_LOSS_K_STRATEGY'),
     )
     parser.add_argument(
         '--use-wandb-logger',
@@ -96,7 +77,7 @@ if __name__ == '__main__':
         setattr(C, param, value)
 
     # delay larger imports until this point (to e.g. speed up displaying help)
-    from cyborg_sal.run import run
+    from cyborg_rt.run import run
     
 
     C.LOG_DIR = '/scratch365/jdulay/cyborg_logs/' \
