@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# * smp (shared memory processing on a single machine up to 64 cores)
+#$ -pe smp 1
+# the queue to bind the job to
+#$ -q gpu
+# request 4 gpus
+#$ -l gpu_card=1
+# job array to run multiple jobs
+#$ -t 1-4
+# the job name
+#$ -N CYBORG-REACTIONTIME_ABLATIONS
+echo " >> Running on $(uname -n)"
+# Gain access to the CRC modules
+if [ -r /opt/crc/Modules/current/init/bash ]; then
+    source /opt/crc/Modules/current/init/bash
+fi
+module load python
+cd /afs/crc.nd.edu/user/j/jdulay/cyborg/CYBORG-SAL-Collab/ || exit 1
+. ./env/bin/activate
+
+./main.py \
+  --seed $SGE_TASK_ID \
+  -B ResNet50 \
+  -L CYBORG+REACTIONTIME \
+  -T original_data \
+  --cyborg-loss-alpha 0.5 \
+  --psych-scaling-constant 0.1 \
+  --use-random-reactiontime normal \
+  --use-wandb-logger true
