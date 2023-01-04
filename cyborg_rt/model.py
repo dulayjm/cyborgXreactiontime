@@ -16,13 +16,13 @@ import torchvision.models as models
 from pytorch_lightning import LightningModule
 import wandb
 
-from cyborg_sal.loss import CYBORGBCEWithLogitsLoss
-from cyborg_sal.loss import CYBORGCrossEntropyLoss
-from cyborg_sal.loss import CYBORGCrossEntropyLossXReactionTime
-from cyborg_sal.loss import ReactionTime
-from cyborg_sal.loss import HarmonizationCYBORGLoss
-from cyborg_sal.utils import get_logger
-from cyborg_sal.utils import requires_human_annotations
+from cyborg_rt.loss import CYBORGBCEWithLogitsLoss
+from cyborg_rt.loss import CYBORGCrossEntropyLoss
+from cyborg_rt.loss import CYBORGCrossEntropyLossXReactionTime
+from cyborg_rt.loss import ReactionTime
+from cyborg_rt.loss import HarmonizationCYBORGLoss
+from cyborg_rt.utils import get_logger
+from cyborg_rt.utils import requires_human_annotations
 
 logger = get_logger(__name__)
 

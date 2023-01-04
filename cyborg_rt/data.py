@@ -17,11 +17,11 @@ from pytorch_lightning import LightningDataModule
 import pandas as pd
 import numpy as np
 
-from cyborg_sal.utils import get_logger
-from cyborg_sal.utils import num_cpus
-from cyborg_sal.utils import dict_union
-from cyborg_sal.utils import requires_human_annotations
-from cyborg_sal.model import get_input_size
+from cyborg_rt.utils import get_logger
+from cyborg_rt.utils import num_cpus
+from cyborg_rt.utils import dict_union
+from cyborg_rt.utils import requires_human_annotations
+from cyborg_rt.model import get_input_size
 
 logger = get_logger(__name__)
 

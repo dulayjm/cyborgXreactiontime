@@ -19,7 +19,6 @@ cd /afs/crc.nd.edu/user/j/jdulay/cyborg/CYBORG-SAL-Collab/ || exit 1
 . ./env/bin/activate
 
 ./main.py \
-  --seed $SGE_TASK_ID \
   -B ResNet50 \
   -L CYBORG+REACTIONTIME \
   -T original_data \

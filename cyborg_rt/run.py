@@ -10,11 +10,11 @@ from datetime import datetime
 
 from pytorch_lightning import seed_everything
 
-from cyborg_sal.model import CYBORGxSAL
-from cyborg_sal.train import create_trainer
-from cyborg_sal.utils import get_logger
-from cyborg_sal.data import DeepFakesDataModule
-from cyborg_sal.data import get_test_data_loaders
+from cyborg_rt.model import CYBORGxSAL
+from cyborg_rt.train import create_trainer
+from cyborg_rt.utils import get_logger
+from cyborg_rt.data import DeepFakesDataModule
+from cyborg_rt.data import get_test_data_loaders
 
 logger = get_logger(__name__)
 

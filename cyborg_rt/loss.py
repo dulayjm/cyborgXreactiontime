@@ -10,8 +10,8 @@ from torch import nn
 from torch import Tensor
 from torch.distributions.uniform import Uniform
 
-from cyborg_sal.utils import prod
-from cyborg_sal.utils import get_logger
+from cyborg_rt.utils import prod
+from cyborg_rt.utils import get_logger
 
 logger = get_logger(__name__)
 

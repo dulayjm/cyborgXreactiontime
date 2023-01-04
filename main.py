@@ -8,7 +8,7 @@ import os
 
 if __name__ == '__main__':
     import argparse
-    from cyborg_sal.config import C
+    from cyborg_rt.config import C
 
     parser = argparse.ArgumentParser(
         description='Entry script to CYBORG-SAL experiments',

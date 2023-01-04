@@ -7,7 +7,7 @@ from pytorch_lightning.callbacks import StochasticWeightAveraging
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
 
-from cyborg_sal.utils import get_logger
+from cyborg_rt.utils import get_logger
 
 logger = get_logger(__name__)
 
