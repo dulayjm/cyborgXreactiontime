@@ -5,3 +5,5 @@ torchmetrics
 captum
 wandb
 Pillow
+pandas
+numpy
