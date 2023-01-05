@@ -229,11 +229,37 @@ class CYBORGCrossEntropyLossXReactionTime(nn.Module):
         # if there is no penalty, the sample is just multiplied by 1
         psych_penalties = torch.ones(len(output)).type_as(reaction_times)
 
+        lower = torch.quantile(reaction_times, 0.25).item()
+        upper = torch.quantile(reaction_times, 0.75).item()
+        # change values inside lower and upper quartiles to 0/1
+        for i in range(len(reaction_times)):
+            if reaction_times[i].item() < lower:
+                reaction_times[i] = 0
+            elif reaction_times[i].item() > upper:
+                reaction_times[i] = 1
+        
+        # this is inefficient, but precise for now
+        # find min and max elements in tensor that are not 0 or 1 
+        min_elem = 100.0
+        max_elem = -100.0
+        for i in range(len(reaction_times)):
+            if reaction_times[i] < min_elem and (reaction_times[i] != 0.0 and reaction_times[i] != 1.0):
+                min_elem = reaction_times[i].item()
+            if reaction_times[i] > max_elem and (reaction_times[i] != 1.0 and reaction_times[i] != 0.0):
+                max_elem = reaction_times[i].item()
+
+        # now we normalize just the values in reaction times piece wise
+        # batchwise normalize to [0, 1] along with height and width
+        for i in range(len(reaction_times)):     
+            if reaction_times[i].item() != 0 and reaction_times[i].item() != 1: 
+                reaction_times[i] -= min_elem
+                reaction_times[i] /= max_elem
+
         # inference on model predictions
         _, preds = torch.max(output.data, 1)
         for i in range(len(preds)):
             if preds[i] != target[i]:
-                psych_penalties[i] *= reaction_times[i] * self.psych_scaling_constant
+                psych_penalties[i] *= reaction_times[i]
                 # output[i] += psych_penalties[i].clone() 
         
         # regular cross-entropy loss after we have modified the logits with reactiontimes
@@ -274,12 +300,40 @@ class ReactionTime(nn.Module):
         # if there is no penalty, the sample is just multiplied by 1
         psych_penalties = torch.ones(len(output)).type_as(reaction_times)
 
+        # calculate quartiles for reaction times
+        lower = torch.quantile(reaction_times, 0.25).item()
+        upper = torch.quantile(reaction_times, 0.75).item()
+        # change values inside lower and upper quartiles to 0/1
+        for i in range(len(reaction_times)):
+            if reaction_times[i].item() < lower:
+                reaction_times[i] = 0
+            elif reaction_times[i].item() > upper:
+                reaction_times[i] = 1
+        
+        # this is inefficient, but precise for now
+        # find min and max elements in tensor that are not 0 or 1 
+        min_elem = 100.0
+        max_elem = -100.0
+        for i in range(len(reaction_times)):
+            if reaction_times[i] < min_elem and (reaction_times[i] != 0.0 and reaction_times[i] != 1.0):
+                min_elem = reaction_times[i].item()
+            if reaction_times[i] > max_elem and (reaction_times[i] != 1.0 and reaction_times[i] != 0.0):
+                max_elem = reaction_times[i].item()
+        # now we normalize just the values in reaction times piece wise
+        # batchwise normalize to [0, 1] along with height and width
+        for i in range(len(reaction_times)):     
+            if reaction_times[i].item() != 0 and reaction_times[i].item() != 1: 
+                reaction_times[i] -= min_elem
+                reaction_times[i] /= max_elem
+
         # inference on model predictions to calculate 
         # which indices to applly psych_penalties
         _, preds = torch.max(output.data, 1)
         for i in range(len(preds)):
             if preds[i] != target[i]:
-                psych_penalties[i] *= reaction_times[i] * self.psych_scaling_constant
+                # psych_penalties[i] *= reaction_times[i] * self.psych_scaling_constant
+                # no need for scaling constant anymore
+                psych_penalties[i] *= reaction_times[i]
                 # output[i] += psych_penalties[i].clone() 
 
         # regular cross-entropy

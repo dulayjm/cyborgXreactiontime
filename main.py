@@ -85,7 +85,7 @@ if __name__ == '__main__':
         + '_' \
         + C.LOSS \
         + '_' \
-        + str(C.PSYCH_SCALING_CONSTANT) \
+        + 'QuartileNorm' \
         + C.USE_RANDOM_REACTIONTIME \
         + '/'
 

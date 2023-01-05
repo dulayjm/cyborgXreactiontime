@@ -6,19 +6,20 @@
 # request 4 gpus
 #$ -l gpu_card=1
 # job array to run multiple jobs
-#$ -t 1-4
+#$ -t 1-5
 # the job name
-#$ -N CYBORG-REACTIONTIME_ABLATIONS
+#$ -N v2CYBORG-REACTIONTIME_ABLATIONS
 echo " >> Running on $(uname -n)"
 # Gain access to the CRC modules
 if [ -r /opt/crc/Modules/current/init/bash ]; then
     source /opt/crc/Modules/current/init/bash
 fi
 module load python
-cd /afs/crc.nd.edu/user/j/jdulay/cyborg/CYBORG-SAL-Collab/ || exit 1
+cd /afs/crc.nd.edu/user/j/jdulay/cyborg/cyborgXreactiontime/ || exit 1
 . ./env/bin/activate
 
 ./main.py \
+  --seed $SGE_TASK_ID \
   -B ResNet50 \
   -L CYBORG+REACTIONTIME \
   -T original_data \
