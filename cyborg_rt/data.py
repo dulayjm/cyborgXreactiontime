@@ -180,14 +180,25 @@ class ImageDataset(Dataset):
                 reaction_time_row = self \
                     .reaction_times_df \
                     .loc[self.reaction_times_df['image_id'] == img_id]
-                reaction_time = reaction_time_row['annotation_time'].values
+                # now, reaction time is the overall time - the time spent annotating
+                # this measures the time they spent looking at the image
+                # before making a decision as to whether it is real or fake
+                reaction_time = reaction_time_row['overall_ann_time'].values \
+                    - reaction_time_row['annotation_time'].values 
+
+                # old implementation
+                # reaction_time = reaction_time_row['annotation_time'].values
+
                 # very rarely, we get some images things that are sampled twice 
                 # choose the max value for now
                 reaction_time = reaction_time.max()
                 reaction_times[i] = reaction_time
-            average_reaction_time = reaction_times.mean()
-            average_reaction_time = torch.from_numpy(np.asarray(average_reaction_time))
-            return image, label, annotation, average_reaction_time
+                
+            average_reaction_time_per_sample = reaction_times.mean()
+            average_reaction_time_per_sample = \
+                torch.from_numpy(np.asarray(average_reaction_time_per_sample))
+            return image, label, annotation, average_reaction_time_per_sample
+
         elif not self.annotation_filenames and self.reactiontime_filename:
             # reaction time only 
             local_img_path = os.path.basename(img_path).split('/')[-1]
@@ -195,18 +206,31 @@ class ImageDataset(Dataset):
             img_ids = img_ids_row['img_id'].values
             # for each id, load the reaction time in the other set
             reaction_times = np.zeros(len(img_ids))
+            new_rts = np.zeros(len(img_ids))
+
             for i, img_id in enumerate(img_ids):
                 reaction_time_row = self \
                     .reaction_times_df \
                     .loc[self.reaction_times_df['image_id'] == img_id]
-                reaction_time = reaction_time_row['annotation_time'].values
+
+                # now, reaction time is the overall time - the time spent annotating
+                # this measures the time they spent looking at the image
+                # before making a decision as to whether it is real or fake
+                reaction_time = reaction_time_row['overall_ann_time'].values \
+                    - reaction_time_row['annotation_time'].values 
+
+                # old implementation
+                # reaction_time = reaction_time_row['annotation_time'].values
+
                 # very rarely, we get some images things that are sampled twice 
                 # choose the max value for now
                 reaction_time = reaction_time.max()
                 reaction_times[i] = reaction_time
-            average_reaction_time = reaction_times.mean()
-            average_reaction_time = torch.from_numpy(np.asarray(average_reaction_time))
-            return image, label, average_reaction_time
+
+            average_reaction_time_per_sample = reaction_times.mean()
+            average_reaction_time_per_sample = \
+                torch.from_numpy(np.asarray(average_reaction_time_per_sample))
+            return image, label, average_reaction_time_per_sample
         else: 
             # normal cross entropy, no additional annotations
             return image, label

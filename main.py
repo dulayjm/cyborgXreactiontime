@@ -85,7 +85,7 @@ if __name__ == '__main__':
         + '_' \
         + C.LOSS \
         + '_' \
-        + 'QuartileNorm' \
+        + 'QuartileNorm_AND_RTsampling' \
         + C.USE_RANDOM_REACTIONTIME \
         + '/'
 
