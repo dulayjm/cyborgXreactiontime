@@ -29,7 +29,7 @@ def create_trainer(C):
         # let's create a WandBLogger
         wandb_logger = WandbLogger(
             name=proj_name,
-            project="dummy-wandb", 
+            project="v3CYBORG", 
             save_dir=C.LOG_DIR,
             log_model=True
         )
