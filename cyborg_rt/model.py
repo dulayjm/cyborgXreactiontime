@@ -6,13 +6,13 @@ from functools import partial
 
 import torch
 from torch import nn
+import torchvision.models as models
 from torchmetrics import Accuracy
 from torchmetrics import AUROC
 from torchmetrics import AveragePrecision
 from torchmetrics import F1Score
 from torchmetrics import Precision
 from torchmetrics import Recall
-import torchvision.models as models
 from pytorch_lightning import LightningModule
 import wandb
 
@@ -21,6 +21,7 @@ from cyborg_rt.loss import CYBORGCrossEntropyLoss
 from cyborg_rt.loss import CYBORGCrossEntropyLossXReactionTime
 from cyborg_rt.loss import ReactionTime
 from cyborg_rt.loss import HarmonizationCYBORGLoss
+from cyborg_rt.loss import DifferentiablePsychLoss
 from cyborg_rt.utils import get_logger
 from cyborg_rt.utils import requires_human_annotations
 
@@ -160,6 +161,12 @@ class CYBORGxSAL(LightningModule):
                 psych_scaling_constant=C.PSYCH_SCALING_CONSTANT
             )
             self.criterion_requires_reactiontimes = True
+        elif loss == 'DIFFERENTIABLE_REACTIONTIME':
+            self.criterion = (nn.BCEWithLogitsLoss() if C.BINARY_OUTPUT else
+                    nn.CrossEntropyLoss())
+            self.criterion_requires_reactiontimes = True
+            self.compute_psych_criterion = DifferentiablePsychLoss()
+
         elif loss in {'CYBORG+SAL', 'SAL+CYBORG', 'SAL'}:
             self.criterion = None
             raise NotImplementedError(loss)
@@ -231,6 +238,12 @@ class CYBORGxSAL(LightningModule):
             if param.requires_grad:
                 logger.info(f'Optimizer will update parameters of "{name}"')
                 params_to_update.append(param)
+
+
+        # but you need separate params for the other optimizer
+        # but in the example, it updates both, for now ...
+        # TODO: you might need to change params_to_update for optimizer2
+
         optimizer = optimizer_cls(params_to_update,
                                   lr=self.C.LEARNING_RATE,
                                   weight_decay=self.C.WEIGHT_DECAY,
@@ -242,7 +255,18 @@ class CYBORGxSAL(LightningModule):
             gamma=self.C.LEARNING_RATE_DECAY_GAMMA,
         )
 
-        return [optimizer], [scheduler]
+        optimizer2 = optimizer_cls(params_to_update,
+                                  lr=self.C.LEARNING_RATE,
+                                  weight_decay=self.C.WEIGHT_DECAY,
+                                  momentum=self.C.MOMENTUM)
+
+        scheduler2 = torch.optim.lr_scheduler.StepLR(
+            optimizer=optimizer2,
+            step_size=self.C.LEARNING_RATE_DECAY_STEP_SIZE,
+            gamma=self.C.LEARNING_RATE_DECAY_GAMMA,
+        )
+
+        return [optimizer, optimizer2], [scheduler]
 
     def forward(self, x, prefix='test'):
         # special case for inception training outputs
@@ -284,7 +308,7 @@ class CYBORGxSAL(LightningModule):
 
         self.backbone_classifier = get_readout(self.C.BACKBONE, self.backbone)
 
-    def training_step(self, batch, batch_idx, dataset_idx=None):
+    def training_step(self, batch, batch_idx, dataset_idx=None, optimizer_idx=None):
         # CYBORG
         if requires_human_annotations(self.C) \
             and not self.criterion_requires_reactiontimes \
@@ -362,9 +386,76 @@ class CYBORGxSAL(LightningModule):
             kwargs['reaction_times'] = dummy_reaction_times
 
         # print(f'the len of kwargs is {len(kwargs)}')
+        # loss = self._compute_criterion(logits, y, x, **kwargs)
 
-        loss = self._compute_criterion(logits, y, x, **kwargs)
-        return loss
+        # print('logit shape is', logits.shape)
+
+        loss = self.criterion(logits, y)
+
+        # TODO:
+        # make the reaction times x 
+        # and the labels some difficulty binning
+        # this might be a little complex
+
+        reaction_times = kwargs['reaction_times']
+
+        lower = torch.quantile(reaction_times, 0.25).item()
+        upper = torch.quantile(reaction_times, 0.75).item()
+        rt_labels = torch.ones(len(reaction_times))
+        for i in range(len(reaction_times)):
+            # 1
+            if reaction_times[i] <= lower:
+                rt_labels[i] = 0
+            # 2
+            elif reaction_times[i] > lower and reaction_times[i] <= upper:
+                rt_labels[i] = 0.5
+            # 3
+            elif reaction_times[i] > upper:
+                rt_labels[i] = 1
+
+        rt_labels = rt_labels.type_as(y)
+
+        # print('x is ', x.dtype)
+        # print('rt_labels is', rt_labels.dtype)
+        # print('y shape for original inputs is', y.dtype)
+        # print('reaction_times are', reaction_times)
+        # print('rt labels are', rt_labels)
+
+        # supervised loss on the fuzzy labels 
+        psych_loss = self.compute_psych_criterion(x, rt_labels)
+
+        # print('regular loss is', loss)
+        # print('psych_loss is', psych_loss)
+
+        # see confidence on given models 
+        # with torch.no_grad():
+        #     probs = torch.nn.functional.softmax(logits, dim=1)
+        #     conf, classes = torch.max(probs, 1)
+
+        #     print('confidence scores', conf)
+        #     print('preds are', classes)
+
+
+        if torch.isnan(loss):
+            print('DEBUGGING: loss is NaN')
+            # 1/0
+
+        self.log('train/loss', loss)
+        self.log("train/psych_loss", psych_loss, prog_bar=True)
+
+        # TODO: see if we return two losses given this
+        # several forums say to do this:
+        # and probably logic to let the default cases still
+        # work outside of this special case we are 
+        # implementing here
+        # return loss
+
+        if optimizer_idx == 0:
+            return loss
+        else:
+            return psych_loss
+
+        # return loss
 
     def on_train_end(self):
         if self.criterion_requires_cams:

@@ -259,7 +259,7 @@ class DeepFakesDataModule(LightningDataModule):
             train_kwargs['annotation_transform'] = get_annotation_transforms(
                 self.C)
         
-        if self.C.LOSS == 'CYBORG+REACTIONTIME' or self.C.LOSS == 'REACTIONTIME':
+        if self.C.LOSS == 'CYBORG+REACTIONTIME' or self.C.LOSS == 'REACTIONTIME' or self.C.LOSS == 'Differentiable_REACTIONTIME':
             train_kwargs['reactiontime_filename'] = self.C.REACTIONTIME_FILE
             train_kwargs['reactiontime_bridge_filename'] = self.C.REACTIONTIME_BRIDGE_FILE
             self.train = ImageDataset({

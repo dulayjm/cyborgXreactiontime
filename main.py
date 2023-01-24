@@ -29,7 +29,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '-L', '--loss', help='The name of the loss to use.',
         choices=['BCE', 'CE', 'CYBORG', 'CYBORG+REACTIONTIME', 
-                'REACTIONTIME', 'CYBORG+HARMONIZATION'],
+                'REACTIONTIME', 'CYBORG+HARMONIZATION', 'Differentiable_REACTIONTIME'],
         default=config_dict.pop('LOSS'),
     )
     parser.add_argument(
@@ -85,7 +85,7 @@ if __name__ == '__main__':
         + '_' \
         + C.LOSS \
         + '_' \
-        + 'QuartileNorm_AND_RTsampling' \
+        + 'Differentiable_REACTIONTIME' \
         + C.USE_RANDOM_REACTIONTIME \
         + '/'
 
