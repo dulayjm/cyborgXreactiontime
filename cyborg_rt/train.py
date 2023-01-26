@@ -29,7 +29,7 @@ def create_trainer(C):
         # let's create a WandBLogger
         wandb_logger = WandbLogger(
             name=proj_name,
-            project="v5CYBORG", 
+            project="v6CYBORG",  
             save_dir=C.LOG_DIR,
             log_model=True
         )
@@ -72,7 +72,7 @@ def create_trainer(C):
         max_epochs=C.EPOCHS,
         num_sanity_val_steps=2 if C.DEBUG else 0,
         # we don't want to generate gigantic o.* files
-        enable_progress_bar=False,
+        enable_progress_bar=True,
         # for debugging only 
         # limit_train_batches=0
     )
