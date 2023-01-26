@@ -165,7 +165,6 @@ logs/
 
 # crc logs
 *.o9*
-v3CYBORG*
 
 # misc plotting and processing files 
 process_results.py
