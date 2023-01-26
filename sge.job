@@ -8,11 +8,7 @@
 # job array to run multiple jobs
 #$ -t 1-5
 # the job name
-<<<<<<< HEAD
-#$ -N v5CYBORG-REACTIONTIME_ABLATIONS
-=======
 #$ -N v2CYBORG-REACTIONTIME_ABLATIONS
->>>>>>> parent of 9b52a53 (fixed env issue)
 echo " >> Running on $(uname -n)"
 # Gain access to the CRC modules
 if [ -r /opt/crc/Modules/current/init/bash ]; then
@@ -25,11 +21,7 @@ cd /afs/crc.nd.edu/user/j/jdulay/cyborg/cyborgXreactiontime/ || exit 1
 ./main.py \
   --seed $SGE_TASK_ID \
   -B ResNet50 \
-<<<<<<< HEAD
-  -L Differentiable_REACTIONTIME \
-=======
   -L CYBORG+REACTIONTIME \
->>>>>>> parent of 9b52a53 (fixed env issue)
   -T original_data \
   --cyborg-loss-alpha 0.5 \
   --psych-scaling-constant 0.1 \

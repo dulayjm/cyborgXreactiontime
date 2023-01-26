@@ -60,8 +60,8 @@ class _Config:
     TEST_DATASET_IDXS = 6
     DATA_DIR_REAL = '0_real'
     DATA_DIR_FAKE = '1_fake'
-    REACTIONTIME_FILE = str(Path('./data/annotations.csv').absolute())
-    REACTIONTIME_BRIDGE_FILE = str(Path('./data/images.csv').absolute())
+    REACTIONTIME_FILE = str(Path('/scratch365/jdulay/annotation_cyborg_time_data/annotations.csv').absolute())
+    REACTIONTIME_BRIDGE_FILE = str(Path('/scratch365/jdulay/annotation_cyborg_time_data/images.csv').absolute())
 
     # You can safely ignore everything below if you're modifying default values
     __C = None
