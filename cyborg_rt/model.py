@@ -7,6 +7,7 @@ from functools import partial
 import torch
 from torch import Tensor
 from torch import nn
+import torch.nn.functional as F
 import torchvision.models as models
 from torchmetrics import Accuracy
 from torchmetrics import AUROC
@@ -32,28 +33,17 @@ class DualGateResNet50(nn.Module):
     def __init__(self, pretrained, num_classes) -> None:
         super().__init__()
         backbone = models.resnet50(pretrained=pretrained)
-        print('debug default resnet config', backbone)
         self.in_features = backbone.fc.in_features
         # pop off the last layer of the model
-        self.model = torch.nn.Sequential(*(list(backbone.children())[:-1]))
+        self.features = torch.nn.Sequential(*(list(backbone.children())[:-1]))
         self.classifier = nn.Linear(self.in_features, num_classes)
         self.regressor = nn.Linear(self.in_features, 1)
         
     def forward(self, x) -> Tensor:
-        print('is this empty?', self.model)
-        print('starting forward pass')
-        print('in features are', self.in_features)
-        print('self.classifier is ', self.classifier)
-        logits = self.model(x)
-        print('logits are', logits.shape)
-
-        logits = logits.view(-1)
-        print('logits are', logits.shape)
-        # why are we not going through this step
+        logits = self.features(x)
+        logits = logits.view(logits.size(0), -1)
         class_outputs = self.classifier(logits)
-        print('class_outputs are', class_outputs.shape)
         regression_outputs = self.regressor(logits)
-        print('regression_outputs are', regression_outputs.shape)
         return class_outputs, regression_outputs
 
 def disable_grad(model):
@@ -312,11 +302,11 @@ class CYBORGxSAL(LightningModule):
         if self.C.BINARY_OUTPUT:
             target = target.float()
 
-        loss = self.criterion(logits, target, **kwargs)
+        loss = self.criterion(logits, target)
         return loss
 
-    def _compute_psych_criterion(logits, target, **kwargs):
-        loss = ...
+    def _compute_psych_criterion(self, logits, target):
+        loss = F.l1_loss(logits, target)
         return loss
 
     def on_train_start(self):
@@ -360,7 +350,7 @@ class CYBORGxSAL(LightningModule):
             and self.criterion_requires_reactiontimes:
             print("We are at reactiomntime weird config thing")
             x, y, reaction_times = batch
-            kwargs = {'reaction_times': reaction_times}
+            kwargs = {'reaction_times' : reaction_times}
         # CYBORG+HARMONIZATION
         elif requires_human_annotations(self.C) \
             and not self.criterion_requires_reactiontimes \
@@ -420,13 +410,24 @@ class CYBORGxSAL(LightningModule):
             dummy_reaction_times = torch.randint(1,20,(len(y),)).type_as(x)
             kwargs['reaction_times'] = dummy_reaction_times
 
+        
+        # compute loss
         if self.C.BACKBONE == 'DualGateResNet50' and self.C.LOSS == 'DIFFERENTIABLE_REACTIONTIME':
+
+            print('logits are', logits)
+            print('regression_logits are', regression_logits)
+
             class_loss = self._compute_criterion(logits, y, x, **kwargs)
             reaction_times = kwargs['reaction_times'].type_as(regression_logits)
             psych_loss = self._compute_psych_criterion(regression_logits, reaction_times)
             #TODO: optimize this somehow
-            loss = class_loss + psych_loss
+            print('class_loss:', class_loss)
+            print('psych_loss:', psych_loss)
+
+            loss = 0.9*class_loss + (1-0.9)*psych_loss
+            print('combined loss is', loss)
         else:
+            # we shoudln't be here
             loss = self._compute_criterion(logits, y, x, **kwargs)
         
         self.log('train/loss', loss)
@@ -469,7 +470,7 @@ class CYBORGxSAL(LightningModule):
                                       'split are not supported yet.')
         x, y = batch[:2]
 
-        logits = self(x, prefix=prefix)
+        logits, _ = self(x, prefix=prefix)
 
         # NOTE: I don't care about BCE right now. 
         # if criterion and not requires_human_annotations(self.C):
@@ -479,6 +480,7 @@ class CYBORGxSAL(LightningModule):
 
         activation = (torch.sigmoid if self.C.BINARY_OUTPUT else
                       partial(torch.softmax, dim=1))
+
         scores = activation(logits)
         for name, metric in self.metrics[prefix].items():
             if dataset_idx is not None:
