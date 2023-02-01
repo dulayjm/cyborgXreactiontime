@@ -72,7 +72,7 @@ def create_trainer(C):
         max_epochs=C.EPOCHS,
         num_sanity_val_steps=2 if C.DEBUG else 0,
         # we don't want to generate gigantic o.* files
-        enable_progress_bar=True,
+        enable_progress_bar=False,
         # for debugging only 
         # limit_train_batches=0
     )

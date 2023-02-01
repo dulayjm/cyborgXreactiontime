@@ -143,7 +143,7 @@ class CYBORGxSAL(LightningModule):
         super().__init__()
 
         self.C = C
-        print('on init, the cnofig is', self.C)
+        # print('on init, the cnofig is', self.C)
         # binary classification task
         num_classes = 1 if C.BINARY_OUTPUT else 2
 
@@ -348,7 +348,7 @@ class CYBORGxSAL(LightningModule):
         # REACTIONTIME
         elif not requires_human_annotations(self.C) \
             and self.criterion_requires_reactiontimes:
-            print("We are at reactiomntime weird config thing")
+            # print("We are at reactiomntime weird config thing")
             x, y, reaction_times = batch
             kwargs = {'reaction_times' : reaction_times}
         # CYBORG+HARMONIZATION
@@ -414,18 +414,18 @@ class CYBORGxSAL(LightningModule):
         # compute loss
         if self.C.BACKBONE == 'DualGateResNet50' and self.C.LOSS == 'DIFFERENTIABLE_REACTIONTIME':
 
-            print('logits are', logits)
-            print('regression_logits are', regression_logits)
+            # print('logits are', logits)
+            # print('regression_logits are', regression_logits)
 
             class_loss = self._compute_criterion(logits, y, x, **kwargs)
             reaction_times = kwargs['reaction_times'].type_as(regression_logits)
             psych_loss = self._compute_psych_criterion(regression_logits, reaction_times)
             #TODO: optimize this somehow
-            print('class_loss:', class_loss)
-            print('psych_loss:', psych_loss)
+            # print('class_loss:', class_loss)
+            # print('psych_loss:', psych_loss)
 
-            loss = 0.9*class_loss + (1-0.9)*psych_loss
-            print('combined loss is', loss)
+            loss = self.C.PSYCH_SCALING_CONSTANT*class_loss + (1 - self.C.PSYCH_SCALING_CONSTANT)*psych_loss
+            # print('combined loss is', loss)
         else:
             # we shoudln't be here
             loss = self._compute_criterion(logits, y, x, **kwargs)
@@ -470,7 +470,11 @@ class CYBORGxSAL(LightningModule):
                                       'split are not supported yet.')
         x, y = batch[:2]
 
-        logits, _ = self(x, prefix=prefix)
+
+        if self.C.BACKBONE == 'DualGateResNet50':
+            logits, _ = self(x, prefix=prefix)
+        else:
+            logits = self(x, prefix=prefix)
 
         # NOTE: I don't care about BCE right now. 
         # if criterion and not requires_human_annotations(self.C):

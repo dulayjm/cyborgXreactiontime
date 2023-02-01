@@ -85,7 +85,7 @@ if __name__ == '__main__':
         + '_' \
         + C.LOSS \
         + '_' \
-        + 'Differentiable_REACTIONTIME' \
+        + str(C.PSYCH_SCALING_CONSTANT) \
         + C.USE_RANDOM_REACTIONTIME \
         + '/'
 

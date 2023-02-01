@@ -34,7 +34,7 @@ class _Config:
     LOSS = 'CE'
 
     CYBORG_LOSS_ALPHA = 0.5
-    PSYCH_SCALING_CONSTANT = 0.005
+    PSYCH_SCALING_CONSTANT = 0.9
     USE_RANDOM_REACTIONTIME = 'random'
     
     GPUS = 1
