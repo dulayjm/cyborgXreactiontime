@@ -43,6 +43,12 @@ def run(C):
 
     logger.info('Load weights of best model.')
     best_model_path = checkpoint_callback.best_model_path
+    # this is the best diff psych one
+    # chpt_path = '/scratch365/jdulay/cyborg_logs/DualGateResNet50_DIFFERENTIABLE_REACTIONTIME_0.7normal/v6CYBORG/tf3xifp2/checkpoints/epoch=9-step=910.ckpt'
+    # do with resnet ce 
+    # chpt_path = '/scratch365/jdulay/cyborg_logs/ResNet50_CE_0.1normal/lightning_logs/version_0/checkpoints/epoch=46-step=4277.ckpt'
+    # and then with cyborg
+    # chpt_path = '/scratch365/jdulay/cyborg_logs/ResNet50_CYBORG_0.1normal/lightning_logs/version_0/checkpoints/epoch=0-step=91.ckpt'
 
     retries = 10
     sleep_secs = 3
@@ -60,6 +66,10 @@ def run(C):
             break
 
     logger.info('Test the best model.')
+
+
+    # model2 = trainer.load_from_checkpoint(chpt_path)
+
     test_data_loaders, test_dataset_names = get_test_data_loaders(C)
     results = trainer.test(model, test_data_loaders)
     results_processed = OrderedDict()

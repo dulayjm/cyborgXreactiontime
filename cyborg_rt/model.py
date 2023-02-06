@@ -5,7 +5,9 @@ Copyright (C) 2021  Zach Carmichael
 from functools import partial
 
 import torch
+from torch import Tensor
 from torch import nn
+import torch.nn.functional as F
 import torchvision.models as models
 from torchmetrics import Accuracy
 from torchmetrics import AUROC
@@ -27,10 +29,62 @@ from cyborg_rt.utils import requires_human_annotations
 logger = get_logger(__name__)
 
 
+class DualGateResNet50(nn.Module):
+    def __init__(self, pretrained, num_classes) -> None:
+        super().__init__()
+        backbone = models.resnet50(pretrained=pretrained)
+        self.in_features = backbone.fc.in_features
+        # pop off the last layer of the model
+        self.features = torch.nn.Sequential(*(list(backbone.children())[:-1]))
+        self.classifier = nn.Linear(self.in_features, num_classes)
+        self.regressor = nn.Linear(self.in_features, 1)
+        
+    def forward(self, x) -> Tensor:
+        logits = self.features(x)
+        print('logits shape before view ', logits.shape)
+        logits = logits.view(logits.size(0), -1)
+        print('logits shape after view', logits.shape)        
+        class_outputs = self.classifier(logits)
+        regression_outputs = self.regressor(logits)
+        return class_outputs, regression_outputs
+
+class DualGateDenseNet121(nn.Module):
+    def __init__(self, pretrained, num_classes) -> None:
+        super().__init__()
+        backbone = models.densenet121(pretrained=pretrained)
+        print('backbone here is', backbone)
+        self.in_features = backbone.classifier.in_features
+        # pop off the last layer of the model
+        print('self.in_features', self.in_features)
+        self.feat = torch.nn.Sequential(*(list(backbone.children())[:-1]))
+        # print('self.features', self.feat)
+
+        self.classifier = nn.Linear(self.in_features, num_classes)
+        print('self.classifier', self.classifier)
+
+        self.regressor = nn.Linear(self.in_features, 1)
+        print('self.regressor', self.regressor)
+ 
+    def forward(self, x) -> Tensor:
+        # dummy = models.densenet121(pretrained=True)
+
+
+        logits = self.feat(x)
+        # print('logits shape before view ', logits.shape)
+        # hand crafted GAP
+        logits = logits.mean(dim=(-2, -1))  # or dim=(2, 3)
+
+        logits = logits.view(logits.size(0), -1)
+        # print('logits shape after view', logits.shape)
+        class_outputs = self.classifier(logits)
+        # print('class outputs ahpe ', class_outputs.shape)
+        regression_outputs = self.regressor(logits)
+        # print('regression shape ', regression_outputs.shape)
+        return class_outputs, regression_outputs
+
 def disable_grad(model):
     for param in model.parameters():
         param.requires_grad = False
-
 
 def get_backbone(name: str, num_classes: int, pretrained=True, freeze=False):
     """
@@ -48,12 +102,22 @@ def get_backbone(name: str, num_classes: int, pretrained=True, freeze=False):
             disable_grad(pretrained_model)
         in_features = pretrained_model.fc.in_features
         pretrained_model.fc = nn.Linear(in_features, num_classes)
+    elif name == 'DualGateResNet50':
+        pretrained_model = DualGateResNet50(pretrained, num_classes)
+        if freeze:
+            disable_grad(pretrained_model)
+        # feature engineering taken care of in the model constructor
     elif name == 'DenseNet121':
         pretrained_model = models.densenet121(pretrained=pretrained)
         if freeze:
             disable_grad(pretrained_model)
         in_features = pretrained_model.classifier.in_features
         pretrained_model.classifier = nn.Linear(in_features, num_classes)
+    elif name == 'DualGateDenseNet121':
+        pretrained_model = DualGateDenseNet121(pretrained, num_classes)
+        if freeze:
+            disable_grad(pretrained_model)
+        # feature engineering taken care of in the model constructor
     elif name == 'Inception_v3':
         pretrained_model = models.inception_v3(pretrained=pretrained)
         if freeze:
@@ -77,6 +141,12 @@ def get_last_conv(name: str, backbone: nn.Module) -> nn.Module:
         raise NotImplementedError(name)
     elif name == 'ResNet50':
         return backbone.layer4
+    elif name == 'DualGateResNet50':
+        # yup ...
+        return backbone.features[-2]
+    elif name == 'DualGateDenseNet121':
+        # yup ...
+        return backbone.features[-2]
     elif name == 'DenseNet121':
         return backbone.features
     elif name == 'Inception_v3':
@@ -91,6 +161,10 @@ def get_readout(name: str, backbone: nn.Module) -> nn.Linear:
         raise NotImplementedError(name)
     elif name == 'ResNet50':
         return backbone.fc
+    elif name == 'DualGateResNet50':
+        return backbone.classifier
+    elif name == 'DualGateDenseNet121':
+        return backbone.classifier
     elif name == 'DenseNet121':
         return backbone.classifier
     elif name == 'Inception_v3':
@@ -102,6 +176,8 @@ def get_readout(name: str, backbone: nn.Module) -> nn.Linear:
 def get_input_size(name: str):
     return {
         'ResNet50': 224,
+        'DualGateResNet50': 224,
+        'DualGateDenseNet121': 224,
         'DenseNet121': 224,
         'Inception_v3': 299,
     }[name]
@@ -117,6 +193,7 @@ class CYBORGxSAL(LightningModule):
         super().__init__()
 
         self.C = C
+        # print('on init, the cnofig is', self.C)
         # binary classification task
         num_classes = 1 if C.BINARY_OUTPUT else 2
 
@@ -131,6 +208,7 @@ class CYBORGxSAL(LightningModule):
         self.criterion_requires_cams = False
         self.criterion_requires_reactiontimes = False
         self.criterion_uses_harmonization = False
+
         if loss in {'BCE', 'CE'}:
             self.criterion = (nn.BCEWithLogitsLoss() if C.BINARY_OUTPUT else
                               nn.CrossEntropyLoss())
@@ -142,6 +220,7 @@ class CYBORGxSAL(LightningModule):
             )
             self.criterion_requires_cams = True
         elif loss == 'CYBORG+REACTIONTIME':
+            print('WE SHOULD NOTE BE HERE ANYMORE')
             loss_cls = CYBORGCrossEntropyLossXReactionTime
             self.criterion = loss_cls(
                 alpha=C.CYBORG_LOSS_ALPHA,
@@ -159,6 +238,24 @@ class CYBORGxSAL(LightningModule):
             self.criterion = loss_cls(
                 psych_scaling_constant=C.PSYCH_SCALING_CONSTANT
             )
+            self.criterion_requires_reactiontimes = True
+        elif loss == 'DIFFERENTIABLE_REACTIONTIME':
+            # for now, the classifier loss is the criterion here
+            # the loss component of RT is setup just in the loss itself 
+            # and the criterion_requires_reactiontimes enables the kwargs
+            self.criterion = nn.CrossEntropyLoss()
+            self.criterion_requires_reactiontimes = True
+        elif loss == 'DIFFERENTIABLE_CYBORG+REACTIONTIME':
+            # for now, the classifier loss is the criterion here
+            # the loss component of RT is setup just in the loss itself 
+            # and the criterion_requires_reactiontimes enables the kwargs
+            print("init here")
+            loss_cls = (CYBORGBCEWithLogitsLoss if C.BINARY_OUTPUT else
+                        CYBORGCrossEntropyLoss)
+            self.criterion = loss_cls(
+                alpha=C.CYBORG_LOSS_ALPHA,
+            )  
+            self.criterion_requires_cams = True
             self.criterion_requires_reactiontimes = True
         elif loss in {'CYBORG+SAL', 'SAL+CYBORG', 'SAL'}:
             self.criterion = None
@@ -231,10 +328,6 @@ class CYBORGxSAL(LightningModule):
             if param.requires_grad:
                 logger.info(f'Optimizer will update parameters of "{name}"')
                 params_to_update.append(param)
-
-
-        # but you need separate params for the other optimizer
-        # but in the example, it updates both, for now ...
         # TODO: you might need to change params_to_update for optimizer2
         optimizer = optimizer_cls(params_to_update,
                                   lr=self.C.LEARNING_RATE,
@@ -252,8 +345,19 @@ class CYBORGxSAL(LightningModule):
         # special case for inception training outputs
         if self.C.BACKBONE == 'Inception_v3' and prefix=='train':
             out, aux = self.backbone(x) 
+        elif self.C.LOSS == 'DIFFERENTIABLE_REACTIONTIME' \
+            and (self.C.BACKBONE == 'DualGateResNet50' or self.C.BACKBONE == 'DualGateDenseNet121') \
+            and prefix=='train':
+            out, regression_output = self.backbone(x)
+            return out, regression_output
+        elif self.C.LOSS == 'DIFFERENTIABLE_CYBORG+REACTIONTIME' \
+            and (self.C.BACKBONE == 'DualGateResNet50' or self.C.BACKBONE == 'DualGateDenseNet121') \
+            and prefix=='train':
+            out, regression_output = self.backbone(x)
+            return out, regression_output
         else:
             out = self.backbone(x)
+
         if self.C.BINARY_OUTPUT:
             out = torch.squeeze(out, dim=1)
         return out
@@ -265,8 +369,17 @@ class CYBORGxSAL(LightningModule):
             kwargs['model'] = self
         if self.C.BINARY_OUTPUT:
             target = target.float()
-
+        
+        # idk, we don't use the reaction times in this part anymore 
+        # it is now in a separate function
+        # will factor out in the future, but this is a work-around for now
+        if 'reaction_times' in kwargs.keys():
+            kwargs.pop('reaction_times')
         loss = self.criterion(logits, target, **kwargs)
+        return loss
+
+    def _compute_psych_criterion(self, logits, target):
+        loss = F.l1_loss(logits, target)
         return loss
 
     def on_train_start(self):
@@ -289,39 +402,46 @@ class CYBORGxSAL(LightningModule):
         self.backbone_classifier = get_readout(self.C.BACKBONE, self.backbone)
 
     def training_step(self, batch, batch_idx, dataset_idx=None, optimizer_idx=None):
+        # TODO: refactor these config steps
         # CYBORG
-        if requires_human_annotations(self.C) \
+        if  self.criterion_requires_cams \
             and not self.criterion_requires_reactiontimes \
             and not self.criterion_uses_harmonization:
             x, y, annotations = batch
             # print('we are at regular cyborg')
             kwargs = {'annotations': annotations}
         # CYBORG+REACTIONTIME
-        elif requires_human_annotations(self.C) \
+        elif self.criterion_requires_cams \
             and self.criterion_requires_reactiontimes:
             x, y, annotations, reaction_times = batch
             # print("We are at cyborg+reacotoin")
-
             kwargs = {'annotations': annotations}
             kwargs['reaction_times'] = reaction_times
         # REACTIONTIME
-        elif not requires_human_annotations(self.C) \
+        elif not self.criterion_requires_cams \
             and self.criterion_requires_reactiontimes:
-            # print("We are at reactiomntime")
+            # print("We are at reactiomntime weird config thing")
             x, y, reaction_times = batch
-            kwargs = {'reaction_times': reaction_times}
+            kwargs = {'reaction_times' : reaction_times}
         # CYBORG+HARMONIZATION
-        elif requires_human_annotations(self.C) \
+        elif self.criterion_requires_cams \
             and not self.criterion_requires_reactiontimes \
             and self.criterion_uses_harmonization:
             # print("We are at harmonization")
             x, y, annotations = batch
             kwargs = {'annotations': annotations}
         else:
+            # print('we are at regular cross entropy')
             x, y = batch
             kwargs = {}
+
         # forward pass
-        logits = self(x, prefix='train')
+        if (self.C.BACKBONE == 'DualGateResNet50' or self.C.BACKBONE == 'DualGateDenseNet121') and self.C.LOSS == 'DIFFERENTIABLE_REACTIONTIME':
+            logits, regression_logits = self(x, prefix='train')
+        elif (self.C.BACKBONE == 'DualGateResNet50' or self.C.BACKBONE == 'DualGateDenseNet121') and self.C.LOSS == 'DIFFERENTIABLE_CYBORG+REACTIONTIME':
+            logits, regression_logits = self(x, prefix='train')
+        else:
+            logits = self(x, prefix='train')
 
         if self.criterion_requires_cams:
             # print('we are requiring cams')
@@ -356,7 +476,7 @@ class CYBORGxSAL(LightningModule):
                                    cams_per_class[1])  # class 1 cams
             kwargs['cams'] = cams
         
-        # placeholder reaction times, if needed again. 
+        # generate reaction times 
         if self.criterion_requires_reactiontimes and self.C.USE_RANDOM_REACTIONTIME == 'random':
             # place_holder dummy reaction times
             # reaction times are random variables in toy example
@@ -365,16 +485,46 @@ class CYBORGxSAL(LightningModule):
             dummy_reaction_times = torch.randint(1,20,(len(y),)).type_as(x)
             kwargs['reaction_times'] = dummy_reaction_times
 
-        # print(f'the len of kwargs is {len(kwargs)}')
-        loss = self._compute_criterion(logits, y, x, **kwargs)
+        
+        # compute loss
+        if (self.C.BACKBONE == 'DualGateResNet50' or self.C.BACKBONE == 'DualGateDenseNet121') and self.C.LOSS == 'DIFFERENTIABLE_REACTIONTIME':
 
+            # print('logits are', logits)
+            # print('regression_logits are', regression_logits)
+
+
+            class_loss = self._compute_criterion(logits, y, x, **kwargs)
+            reaction_times = kwargs['reaction_times'].type_as(regression_logits)
+            psych_loss = self._compute_psych_criterion(regression_logits, reaction_times)
+            #TODO: optimize this somehow
+            # print('class_loss:', class_loss)
+            # print('psych_loss:', psych_loss)
+
+            loss = self.C.PSYCH_SCALING_CONSTANT*class_loss + (1 - self.C.PSYCH_SCALING_CONSTANT)*psych_loss
+            # print('combined loss is', loss)
+        elif (self.C.BACKBONE == 'DualGateResNet50' or self.C.BACKBONE == 'DualGateDenseNet121') and self.C.LOSS == 'DIFFERENTIABLE_CYBORG+REACTIONTIME':
+
+            # print('logits are', logits)
+            # print('regression_logits are', regression_logits)
+
+            # cams should ... be a kwarg
+            # print('our kwargs are', kwargs.keys())
+
+            # NOTE: class loss here is indeed CYBORG loss 
+            class_loss = self._compute_criterion(logits, y, x, **kwargs)
+            reaction_times = kwargs['reaction_times'].type_as(regression_logits)
+            psych_loss = self._compute_psych_criterion(regression_logits, reaction_times)
+            #TODO: optimize this somehow
+            # print('class_loss:', class_loss)
+            # print('psych_loss:', psych_loss)
+
+            loss = self.C.PSYCH_SCALING_CONSTANT*class_loss + (1 - self.C.PSYCH_SCALING_CONSTANT)*psych_loss
+        else:
+            # we shoudln't be here
+            loss = self._compute_criterion(logits, y, x, **kwargs)
+        
         self.log('train/loss', loss)
-
-        # TODO: see if we return two losses given this
-
         return loss
-
-        # return loss
 
     def on_train_end(self):
         if self.criterion_requires_cams:
@@ -413,7 +563,11 @@ class CYBORGxSAL(LightningModule):
                                       'split are not supported yet.')
         x, y = batch[:2]
 
-        logits = self(x, prefix=prefix)
+
+        if (self.C.BACKBONE == 'DualGateResNet50' or self.C.BACKBONE == 'DualGateDenseNet121'):
+            logits, _ = self(x, prefix=prefix)
+        else:
+            logits = self(x, prefix=prefix)
 
         # NOTE: I don't care about BCE right now. 
         # if criterion and not requires_human_annotations(self.C):
@@ -423,6 +577,7 @@ class CYBORGxSAL(LightningModule):
 
         activation = (torch.sigmoid if self.C.BINARY_OUTPUT else
                       partial(torch.softmax, dim=1))
+
         scores = activation(logits)
         for name, metric in self.metrics[prefix].items():
             if dataset_idx is not None:

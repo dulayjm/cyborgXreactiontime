@@ -16,7 +16,6 @@ def create_trainer(C):
     """
 
     """    
-
     if C.USE_WANDB_LOGGER:
         proj_name = C.BACKBONE \
             + '_' \
@@ -29,7 +28,7 @@ def create_trainer(C):
         # let's create a WandBLogger
         wandb_logger = WandbLogger(
             name=proj_name,
-            project="v5CYBORG", 
+            project="v6CYBORG",  
             save_dir=C.LOG_DIR,
             log_model=True
         )
