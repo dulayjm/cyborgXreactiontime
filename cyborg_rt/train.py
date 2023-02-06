@@ -16,7 +16,6 @@ def create_trainer(C):
     """
 
     """    
-
     if C.USE_WANDB_LOGGER:
         proj_name = C.BACKBONE \
             + '_' \

@@ -197,6 +197,7 @@ class ImageDataset(Dataset):
             average_reaction_time_per_sample = reaction_times.mean()
             average_reaction_time_per_sample = \
                 torch.from_numpy(np.asarray(average_reaction_time_per_sample))
+            
             return image, label, annotation, average_reaction_time_per_sample
 
         elif not self.annotation_filenames and self.reactiontime_filename:
@@ -249,7 +250,7 @@ class DeepFakesDataModule(LightningDataModule):
         """called on every GPU"""
         transforms = get_transforms(self.C)
         train_kwargs = {}
-        if requires_human_annotations(self.C):
+        if self.C.LOSS == 'CYBORG' or self.C.LOSS == 'DIFFERENTIABLE_CYBORG+REACTIONTIME':
             logger.info('Data requires human annotations to be loaded.')
             train_kwargs['annotations'] = os.path.join(
                 self.C.DATA_DIR_BASE,
@@ -259,7 +260,8 @@ class DeepFakesDataModule(LightningDataModule):
             train_kwargs['annotation_transform'] = get_annotation_transforms(
                 self.C)
         
-        if self.C.LOSS == 'CYBORG+REACTIONTIME' or self.C.LOSS == 'REACTIONTIME' or self.C.LOSS == 'DIFFERENTIABLE_REACTIONTIME':
+        if self.C.LOSS == 'CYBORG+REACTIONTIME' or self.C.LOSS == 'REACTIONTIME' \
+            or self.C.LOSS == 'DIFFERENTIABLE_REACTIONTIME' or self.C.LOSS == 'DIFFERENTIABLE_CYBORG+REACTIONTIME':
             train_kwargs['reactiontime_filename'] = self.C.REACTIONTIME_FILE
             train_kwargs['reactiontime_bridge_filename'] = self.C.REACTIONTIME_BRIDGE_FILE
             self.train = ImageDataset({
@@ -321,63 +323,66 @@ def get_test_data_loaders(C):
 
     datasets = [
         # For ProGAN and StarGANv2, the real data is CelebA-HQ
-        ImageDataset({
-            os.path.join(real, 'celeba-hq_real_aligned'): 0,
-            os.path.join(fake, 'progan_aligned'): 1,
-        }, transform=transforms),
-        ImageDataset({
-            os.path.join(real, 'celeba-hq_real_aligned'): 0,
-            os.path.join(fake, 'stargan_aligned'): 1,
-        }, transform=transforms),
-        # For the remaining four StyleGAN sets, the real data is FFHQ
-        ImageDataset(dict_union(
-            {os.path.join(real, 'ffhq_aligned'): 0},
-            {os.path.join(fake, 'stylegan1-0.5_aligned', dirname): 1
-             for dirname in os.listdir(
-                os.path.join(fake, 'stylegan1-0.5_aligned'))}),
-            transform=transforms),
-        ImageDataset(dict_union(
-            {os.path.join(real, 'ffhq_aligned'): 0},
-            {os.path.join(fake, 'stylegan2-0.5_aligned', dirname): 1
-             for dirname in os.listdir(
-                os.path.join(fake, 'stylegan2-0.5_aligned'))}),
-            transform=transforms),
-        ImageDataset({
-            os.path.join(real, 'ffhq_aligned'): 0,
-            os.path.join(fake, 'stylegan3-0.5_aligned'): 1,
-        }, transform=transforms),
-        ImageDataset({
-            os.path.join(real, 'ffhq_aligned'): 0,
-            os.path.join(fake, 'stylegan-ada-0.5_aligned'): 1,
-        }, transform=transforms),
-
-        # # all celebs together
-        # ImageDataset(dict_union(
-        #     {os.path.join(real, 'celeba-hq_real_aligned'): 0},
-        #     {os.path.join(fake, 'progan_aligned'): 1},
-        #     {os.path.join(fake, 'stargan_aligned'): 1}),
-        #     transform=transforms),
-        # # all the style datasets
+        # ImageDataset({
+        #     os.path.join(real, 'celeba-hq_real_aligned'): 0,
+        #     os.path.join(fake, 'progan_aligned'): 1,
+        # }, transform=transforms),
+        # ImageDataset({
+        #     os.path.join(real, 'celeba-hq_real_aligned'): 0,
+        #     os.path.join(fake, 'stargan_aligned'): 1,
+        # }, transform=transforms),
+        # # For the remaining four StyleGAN sets, the real data is FFHQ
         # ImageDataset(dict_union(
         #     {os.path.join(real, 'ffhq_aligned'): 0},
         #     {os.path.join(fake, 'stylegan1-0.5_aligned', dirname): 1
         #      for dirname in os.listdir(
-        #         os.path.join(fake, 'stylegan1-0.5_aligned'))},
+        #         os.path.join(fake, 'stylegan1-0.5_aligned'))}),
+        #     transform=transforms),
+        # ImageDataset(dict_union(
+        #     {os.path.join(real, 'ffhq_aligned'): 0},
         #     {os.path.join(fake, 'stylegan2-0.5_aligned', dirname): 1
         #      for dirname in os.listdir(
-        #         os.path.join(fake, 'stylegan2-0.5_aligned'))},
-        #     {os.path.join(fake, 'stylegan3-0.5_aligned'): 1},
-        #     {os.path.join(fake, 'stylegan-ada-0.5_aligned'): 1}
-        #     ),
+        #         os.path.join(fake, 'stylegan2-0.5_aligned'))}),
         #     transform=transforms),
+        # ImageDataset({
+        #     os.path.join(real, 'ffhq_aligned'): 0,
+        #     os.path.join(fake, 'stylegan3-0.5_aligned'): 1,
+        # }, transform=transforms),
+        # ImageDataset({
+        #     os.path.join(real, 'ffhq_aligned'): 0,
+        #     os.path.join(fake, 'stylegan-ada-0.5_aligned'): 1,
+        # }, transform=transforms),
+
+        # # all celebs together
+        ImageDataset(dict_union(
+            {os.path.join(real, 'celeba-hq_real_aligned'): 0},
+            {os.path.join(fake, 'progan_aligned'): 1},
+            {os.path.join(fake, 'stargan_aligned'): 1}),
+            transform=transforms),
+        # all the style datasets
+        ImageDataset(dict_union(
+            {os.path.join(real, 'ffhq_aligned'): 0},
+            {os.path.join(fake, 'stylegan1-0.5_aligned', dirname): 1
+             for dirname in os.listdir(
+                os.path.join(fake, 'stylegan1-0.5_aligned'))},
+            {os.path.join(fake, 'stylegan2-0.5_aligned', dirname): 1
+             for dirname in os.listdir(
+                os.path.join(fake, 'stylegan2-0.5_aligned'))},
+            {os.path.join(fake, 'stylegan3-0.5_aligned'): 1},
+            {os.path.join(fake, 'stylegan-ada-0.5_aligned'): 1}
+            ),
+            transform=transforms),
 
     ]
-    names = ['ProGAN', 'StarGANv2', 'StyleGAN', 'StyleGANv2', 'StyleGANv3',
-             'StyleGAN2-ADA']
+    # names = ['ProGAN', 'StarGANv2', 'StyleGAN', 'StyleGANv2', 'StyleGANv3',
+    #          'StyleGAN2-ADA']
+    names = ['celebs_combined', 'StyleGAN_combined']
     if C.QUICK_TEST:
         datasets = datasets[:2]
         names = names[:2]
     # BIST
+    print('holy fucking shit these shouldb et ehs same', len(names), len(datasets))
+
     assert len(names) == len(datasets)
     data_loaders = [DataLoader(ds, batch_size=C.BATCH_SIZE,
                                num_workers=num_cpus(), drop_last=True)

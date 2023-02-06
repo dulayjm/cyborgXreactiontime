@@ -98,8 +98,21 @@ def get_last_conv(name: str, backbone: nn.Module) -> nn.Module:
     if name in {'Xception', 'CNNDetection', 'Self-Attention'}:
         # TODO
         raise NotImplementedError(name)
-    elif name == 'ResNet50' or name == 'DualGateResNet50':
+    elif name == 'ResNet50':
         return backbone.layer4
+    elif name == 'DualGateResNet50':
+        # what val should this be
+        # dummy = models.resnet50(pretrained=True)
+        # print('dummy: \n\n')
+        # print(dummy)
+        # print('backbone: \n\n')
+        # print(backbone)
+
+
+        # print('dummy.layer4', dummy.layer4)
+        # print('backbone.7', backbone.features[-2])
+        # yup ...
+        return backbone.features[-2]
     elif name == 'DenseNet121':
         return backbone.features
     elif name == 'Inception_v3':
@@ -170,6 +183,7 @@ class CYBORGxSAL(LightningModule):
             )
             self.criterion_requires_cams = True
         elif loss == 'CYBORG+REACTIONTIME':
+            print('WE SHOULD NOTE BE HERE ANYMORE')
             loss_cls = CYBORGCrossEntropyLossXReactionTime
             self.criterion = loss_cls(
                 alpha=C.CYBORG_LOSS_ALPHA,
@@ -193,6 +207,18 @@ class CYBORGxSAL(LightningModule):
             # the loss component of RT is setup just in the loss itself 
             # and the criterion_requires_reactiontimes enables the kwargs
             self.criterion = nn.CrossEntropyLoss()
+            self.criterion_requires_reactiontimes = True
+        elif loss == 'DIFFERENTIABLE_CYBORG+REACTIONTIME':
+            # for now, the classifier loss is the criterion here
+            # the loss component of RT is setup just in the loss itself 
+            # and the criterion_requires_reactiontimes enables the kwargs
+            print("init here")
+            loss_cls = (CYBORGBCEWithLogitsLoss if C.BINARY_OUTPUT else
+                        CYBORGCrossEntropyLoss)
+            self.criterion = loss_cls(
+                alpha=C.CYBORG_LOSS_ALPHA,
+            )  
+            self.criterion_requires_cams = True
             self.criterion_requires_reactiontimes = True
         elif loss in {'CYBORG+SAL', 'SAL+CYBORG', 'SAL'}:
             self.criterion = None
@@ -287,6 +313,11 @@ class CYBORGxSAL(LightningModule):
             and prefix=='train':
             out, regression_output = self.backbone(x)
             return out, regression_output
+        elif self.C.LOSS == 'DIFFERENTIABLE_CYBORG+REACTIONTIME' \
+            and self.C.BACKBONE == 'DualGateResNet50' \
+            and prefix=='train':
+            out, regression_output = self.backbone(x)
+            return out, regression_output
         else:
             out = self.backbone(x)
 
@@ -302,7 +333,13 @@ class CYBORGxSAL(LightningModule):
         if self.C.BINARY_OUTPUT:
             target = target.float()
 
-        loss = self.criterion(logits, target)
+        # print('here is', self.criterion)
+        # print('our kwargs are', kwargs.keys())
+        # where the fuck did we lose those things?
+        # okay so we don't want to puass it reaction times 
+        if 'reaction_times' in kwargs.keys():
+            kwargs.pop('reaction_times')
+        loss = self.criterion(logits, target, **kwargs)
         return loss
 
     def _compute_psych_criterion(self, logits, target):
@@ -331,39 +368,46 @@ class CYBORGxSAL(LightningModule):
     def training_step(self, batch, batch_idx, dataset_idx=None, optimizer_idx=None):
         # TODO: refactor these config steps
         # CYBORG
-        if requires_human_annotations(self.C) \
+        if  self.criterion_requires_cams \
             and not self.criterion_requires_reactiontimes \
             and not self.criterion_uses_harmonization:
             x, y, annotations = batch
             # print('we are at regular cyborg')
             kwargs = {'annotations': annotations}
         # CYBORG+REACTIONTIME
-        elif requires_human_annotations(self.C) \
+        elif self.criterion_requires_cams \
             and self.criterion_requires_reactiontimes:
+            # print("should be here")
+            # print('the batch isss', len(batch))
+            # idk why this isn't working
+
             x, y, annotations, reaction_times = batch
             # print("We are at cyborg+reacotoin")
 
             kwargs = {'annotations': annotations}
             kwargs['reaction_times'] = reaction_times
         # REACTIONTIME
-        elif not requires_human_annotations(self.C) \
+        elif not self.criterion_requires_cams \
             and self.criterion_requires_reactiontimes:
-            # print("We are at reactiomntime weird config thing")
+            print("We are at reactiomntime weird config thing")
             x, y, reaction_times = batch
             kwargs = {'reaction_times' : reaction_times}
         # CYBORG+HARMONIZATION
-        elif requires_human_annotations(self.C) \
+        elif self.criterion_requires_cams \
             and not self.criterion_requires_reactiontimes \
             and self.criterion_uses_harmonization:
             # print("We are at harmonization")
             x, y, annotations = batch
             kwargs = {'annotations': annotations}
         else:
+            # print('we are at regular cross entropy')
             x, y = batch
             kwargs = {}
 
         # forward pass
         if self.C.BACKBONE == 'DualGateResNet50' and self.C.LOSS == 'DIFFERENTIABLE_REACTIONTIME':
+            logits, regression_logits = self(x, prefix='train')
+        elif self.C.BACKBONE == 'DualGateResNet50' and self.C.LOSS == 'DIFFERENTIABLE_CYBORG+REACTIONTIME':
             logits, regression_logits = self(x, prefix='train')
         else:
             logits = self(x, prefix='train')
@@ -417,6 +461,7 @@ class CYBORGxSAL(LightningModule):
             # print('logits are', logits)
             # print('regression_logits are', regression_logits)
 
+
             class_loss = self._compute_criterion(logits, y, x, **kwargs)
             reaction_times = kwargs['reaction_times'].type_as(regression_logits)
             psych_loss = self._compute_psych_criterion(regression_logits, reaction_times)
@@ -426,6 +471,23 @@ class CYBORGxSAL(LightningModule):
 
             loss = self.C.PSYCH_SCALING_CONSTANT*class_loss + (1 - self.C.PSYCH_SCALING_CONSTANT)*psych_loss
             # print('combined loss is', loss)
+        elif self.C.BACKBONE == 'DualGateResNet50' and self.C.LOSS == 'DIFFERENTIABLE_CYBORG+REACTIONTIME':
+
+            # print('logits are', logits)
+            # print('regression_logits are', regression_logits)
+
+            # cams should ... be a kwarg
+            # print('our kwargs are', kwargs.keys())
+
+            # NOTE: class loss here is indeed CYBORG loss 
+            class_loss = self._compute_criterion(logits, y, x, **kwargs)
+            reaction_times = kwargs['reaction_times'].type_as(regression_logits)
+            psych_loss = self._compute_psych_criterion(regression_logits, reaction_times)
+            #TODO: optimize this somehow
+            # print('class_loss:', class_loss)
+            # print('psych_loss:', psych_loss)
+
+            loss = self.C.PSYCH_SCALING_CONSTANT*class_loss + (1 - self.C.PSYCH_SCALING_CONSTANT)*psych_loss
         else:
             # we shoudln't be here
             loss = self._compute_criterion(logits, y, x, **kwargs)

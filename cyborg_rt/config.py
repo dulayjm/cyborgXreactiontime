@@ -24,7 +24,7 @@ class _Config:
     MOMENTUM = 0.9
     WEIGHT_DECAY = 1e-6
     EPOCHS = 50
-    BATCH_SIZE = 20
+    BATCH_SIZE = 8
     STOCHASTIC_WEIGHT_AVERAGING = False
 
     BINARY_OUTPUT = False
