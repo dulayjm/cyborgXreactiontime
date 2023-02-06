@@ -20,8 +20,8 @@ cd /afs/crc.nd.edu/user/j/jdulay/cyborg/cyborgXreactiontime/ || exit 1
 
 ./main.py \
   --seed $SGE_TASK_ID \
-  -B DualGateResNet50 \
-  -L DIFFERENTIABLE_CYBORG+REACTIONTIME \
+  -B DualGateDenseNet121 \
+  -L DIFFERENTIABLE_REACTIONTIME \
   -T original_data \
   --cyborg-loss-alpha 0.5 \
   --psych-scaling-constant 0.7 \

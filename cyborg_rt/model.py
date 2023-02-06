@@ -41,9 +41,45 @@ class DualGateResNet50(nn.Module):
         
     def forward(self, x) -> Tensor:
         logits = self.features(x)
+        print('logits shape before view ', logits.shape)
         logits = logits.view(logits.size(0), -1)
+        print('logits shape after view', logits.shape)        
         class_outputs = self.classifier(logits)
         regression_outputs = self.regressor(logits)
+        return class_outputs, regression_outputs
+
+class DualGateDenseNet121(nn.Module):
+    def __init__(self, pretrained, num_classes) -> None:
+        super().__init__()
+        backbone = models.densenet121(pretrained=pretrained)
+        print('backbone here is', backbone)
+        self.in_features = backbone.classifier.in_features
+        # pop off the last layer of the model
+        print('self.in_features', self.in_features)
+        self.feat = torch.nn.Sequential(*(list(backbone.children())[:-1]))
+        # print('self.features', self.feat)
+
+        self.classifier = nn.Linear(self.in_features, num_classes)
+        print('self.classifier', self.classifier)
+
+        self.regressor = nn.Linear(self.in_features, 1)
+        print('self.regressor', self.regressor)
+ 
+    def forward(self, x) -> Tensor:
+        # dummy = models.densenet121(pretrained=True)
+
+
+        logits = self.feat(x)
+        # print('logits shape before view ', logits.shape)
+        # hand crafted GAP
+        logits = logits.mean(dim=(-2, -1))  # or dim=(2, 3)
+
+        logits = logits.view(logits.size(0), -1)
+        # print('logits shape after view', logits.shape)
+        class_outputs = self.classifier(logits)
+        # print('class outputs ahpe ', class_outputs.shape)
+        regression_outputs = self.regressor(logits)
+        # print('regression shape ', regression_outputs.shape)
         return class_outputs, regression_outputs
 
 def disable_grad(model):
@@ -77,6 +113,11 @@ def get_backbone(name: str, num_classes: int, pretrained=True, freeze=False):
             disable_grad(pretrained_model)
         in_features = pretrained_model.classifier.in_features
         pretrained_model.classifier = nn.Linear(in_features, num_classes)
+    elif name == 'DualGateDenseNet121':
+        pretrained_model = DualGateDenseNet121(pretrained, num_classes)
+        if freeze:
+            disable_grad(pretrained_model)
+        # feature engineering taken care of in the model constructor
     elif name == 'Inception_v3':
         pretrained_model = models.inception_v3(pretrained=pretrained)
         if freeze:
@@ -101,16 +142,9 @@ def get_last_conv(name: str, backbone: nn.Module) -> nn.Module:
     elif name == 'ResNet50':
         return backbone.layer4
     elif name == 'DualGateResNet50':
-        # what val should this be
-        # dummy = models.resnet50(pretrained=True)
-        # print('dummy: \n\n')
-        # print(dummy)
-        # print('backbone: \n\n')
-        # print(backbone)
-
-
-        # print('dummy.layer4', dummy.layer4)
-        # print('backbone.7', backbone.features[-2])
+        # yup ...
+        return backbone.features[-2]
+    elif name == 'DualGateDenseNet121':
         # yup ...
         return backbone.features[-2]
     elif name == 'DenseNet121':
@@ -129,6 +163,8 @@ def get_readout(name: str, backbone: nn.Module) -> nn.Linear:
         return backbone.fc
     elif name == 'DualGateResNet50':
         return backbone.classifier
+    elif name == 'DualGateDenseNet121':
+        return backbone.classifier
     elif name == 'DenseNet121':
         return backbone.classifier
     elif name == 'Inception_v3':
@@ -141,6 +177,7 @@ def get_input_size(name: str):
     return {
         'ResNet50': 224,
         'DualGateResNet50': 224,
+        'DualGateDenseNet121': 224,
         'DenseNet121': 224,
         'Inception_v3': 299,
     }[name]
@@ -309,12 +346,12 @@ class CYBORGxSAL(LightningModule):
         if self.C.BACKBONE == 'Inception_v3' and prefix=='train':
             out, aux = self.backbone(x) 
         elif self.C.LOSS == 'DIFFERENTIABLE_REACTIONTIME' \
-            and self.C.BACKBONE == 'DualGateResNet50' \
+            and (self.C.BACKBONE == 'DualGateResNet50' or self.C.BACKBONE == 'DualGateDenseNet121') \
             and prefix=='train':
             out, regression_output = self.backbone(x)
             return out, regression_output
         elif self.C.LOSS == 'DIFFERENTIABLE_CYBORG+REACTIONTIME' \
-            and self.C.BACKBONE == 'DualGateResNet50' \
+            and (self.C.BACKBONE == 'DualGateResNet50' or self.C.BACKBONE == 'DualGateDenseNet121') \
             and prefix=='train':
             out, regression_output = self.backbone(x)
             return out, regression_output
@@ -332,11 +369,10 @@ class CYBORGxSAL(LightningModule):
             kwargs['model'] = self
         if self.C.BINARY_OUTPUT:
             target = target.float()
-
-        # print('here is', self.criterion)
-        # print('our kwargs are', kwargs.keys())
-        # where the fuck did we lose those things?
-        # okay so we don't want to puass it reaction times 
+        
+        # idk, we don't use the reaction times in this part anymore 
+        # it is now in a separate function
+        # will factor out in the future, but this is a work-around for now
         if 'reaction_times' in kwargs.keys():
             kwargs.pop('reaction_times')
         loss = self.criterion(logits, target, **kwargs)
@@ -377,19 +413,14 @@ class CYBORGxSAL(LightningModule):
         # CYBORG+REACTIONTIME
         elif self.criterion_requires_cams \
             and self.criterion_requires_reactiontimes:
-            # print("should be here")
-            # print('the batch isss', len(batch))
-            # idk why this isn't working
-
             x, y, annotations, reaction_times = batch
             # print("We are at cyborg+reacotoin")
-
             kwargs = {'annotations': annotations}
             kwargs['reaction_times'] = reaction_times
         # REACTIONTIME
         elif not self.criterion_requires_cams \
             and self.criterion_requires_reactiontimes:
-            print("We are at reactiomntime weird config thing")
+            # print("We are at reactiomntime weird config thing")
             x, y, reaction_times = batch
             kwargs = {'reaction_times' : reaction_times}
         # CYBORG+HARMONIZATION
@@ -405,9 +436,9 @@ class CYBORGxSAL(LightningModule):
             kwargs = {}
 
         # forward pass
-        if self.C.BACKBONE == 'DualGateResNet50' and self.C.LOSS == 'DIFFERENTIABLE_REACTIONTIME':
+        if (self.C.BACKBONE == 'DualGateResNet50' or self.C.BACKBONE == 'DualGateDenseNet121') and self.C.LOSS == 'DIFFERENTIABLE_REACTIONTIME':
             logits, regression_logits = self(x, prefix='train')
-        elif self.C.BACKBONE == 'DualGateResNet50' and self.C.LOSS == 'DIFFERENTIABLE_CYBORG+REACTIONTIME':
+        elif (self.C.BACKBONE == 'DualGateResNet50' or self.C.BACKBONE == 'DualGateDenseNet121') and self.C.LOSS == 'DIFFERENTIABLE_CYBORG+REACTIONTIME':
             logits, regression_logits = self(x, prefix='train')
         else:
             logits = self(x, prefix='train')
@@ -456,7 +487,7 @@ class CYBORGxSAL(LightningModule):
 
         
         # compute loss
-        if self.C.BACKBONE == 'DualGateResNet50' and self.C.LOSS == 'DIFFERENTIABLE_REACTIONTIME':
+        if (self.C.BACKBONE == 'DualGateResNet50' or self.C.BACKBONE == 'DualGateDenseNet121') and self.C.LOSS == 'DIFFERENTIABLE_REACTIONTIME':
 
             # print('logits are', logits)
             # print('regression_logits are', regression_logits)
@@ -471,7 +502,7 @@ class CYBORGxSAL(LightningModule):
 
             loss = self.C.PSYCH_SCALING_CONSTANT*class_loss + (1 - self.C.PSYCH_SCALING_CONSTANT)*psych_loss
             # print('combined loss is', loss)
-        elif self.C.BACKBONE == 'DualGateResNet50' and self.C.LOSS == 'DIFFERENTIABLE_CYBORG+REACTIONTIME':
+        elif (self.C.BACKBONE == 'DualGateResNet50' or self.C.BACKBONE == 'DualGateDenseNet121') and self.C.LOSS == 'DIFFERENTIABLE_CYBORG+REACTIONTIME':
 
             # print('logits are', logits)
             # print('regression_logits are', regression_logits)
@@ -533,7 +564,7 @@ class CYBORGxSAL(LightningModule):
         x, y = batch[:2]
 
 
-        if self.C.BACKBONE == 'DualGateResNet50':
+        if (self.C.BACKBONE == 'DualGateResNet50' or self.C.BACKBONE == 'DualGateDenseNet121'):
             logits, _ = self(x, prefix=prefix)
         else:
             logits = self(x, prefix=prefix)

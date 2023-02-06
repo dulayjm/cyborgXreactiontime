@@ -23,7 +23,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '-B', '--backbone', help='The name of the pre-trained backbone to use.',
         choices=['DenseNet121', 'ResNet50', 'Inception_v3', 'Xception',
-                 'CNNDetection', 'Self-Attention', 'DualGateResNet50'],
+                 'CNNDetection', 'Self-Attention', 'DualGateResNet50', 'DualGateDenseNet121'],
         default=config_dict.pop('BACKBONE'),
     )
     parser.add_argument(

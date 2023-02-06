@@ -381,8 +381,6 @@ def get_test_data_loaders(C):
         datasets = datasets[:2]
         names = names[:2]
     # BIST
-    print('holy fucking shit these shouldb et ehs same', len(names), len(datasets))
-
     assert len(names) == len(datasets)
     data_loaders = [DataLoader(ds, batch_size=C.BATCH_SIZE,
                                num_workers=num_cpus(), drop_last=True)
