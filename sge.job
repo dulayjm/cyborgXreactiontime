@@ -9,7 +9,7 @@
 # job array to run multiple jobs
 #$ -t 1-5
 # the job name
-#$ -N v6_Densenet_CE_training_alldatasets
+#$ -N v6_Densenet_CYBORG+REACTIONTIME_training_alldatasets
 echo " >> Running on $(uname -n)"
 # Gain access to the CRC modules
 if [ -r /opt/crc/Modules/current/init/bash ]; then
@@ -21,8 +21,8 @@ cd /afs/crc.nd.edu/user/j/jdulay/cyborg/cyborgXreactiontime/ || exit 1
 
 ./main.py \
   --seed $SGE_TASK_ID \
-  -B DenseNet121 \
-  -L CE \
+  -B DualGateDenseNet121 \
+  -L DIFFERENTIABLE_CYBORG+REACTIONTIME \
   -T original_data \
   --cyborg-loss-alpha 0.5 \
   --psych-scaling-constant 0.7 \

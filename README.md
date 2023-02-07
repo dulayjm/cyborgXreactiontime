@@ -53,16 +53,17 @@ Run the following for help:
 
 General options:
 
+Cross-Entropy:
+
 ```shell
 ./main.py \
   -B DenseNet121 \
-  ... \
-  --epochs 2 \
-  --gpus 1 \
-  --quick-test \
-  --batch-size 64 \
-  --hparam-tune \
-  --stochastic-weight-averaging
+  -L CE \
+  -T original_data \
+  --cyborg-loss-alpha 0.5 \
+  --psych-scaling-constant 0.7 \
+  --use-random-reactiontime normal \
+  --use-wandb-logger true
 ```
 
 CYBORG:
@@ -70,19 +71,38 @@ CYBORG:
 ```shell
 ./main.py \
   -B DenseNet121 \
-  -L CYBORG \
+  -L DIFFERENTIABLE_CYBORG+REACTIONTIME \
   -T original_data \
-  --cyborg-loss-alpha 0.5
+  --cyborg-loss-alpha 0.5 \
+  --psych-scaling-constant 0.7 \
+  --use-random-reactiontime normal \
+  --use-wandb-logger true
+```
+
+REACTIONTIME:
+
+```shell
+./main.py \
+  -B DualGateDenseNet121 \
+  -L DIFFERENTIABLE_REACTIONTIME \
+  -T original_data \
+  --cyborg-loss-alpha 0.5 \
+  --psych-scaling-constant 0.7 \
+  --use-random-reactiontime normal \
+  --use-wandb-logger true
 ```
 
 CYBORG+REACTIONTIME:
 
 ```shell
 ./main.py \
-  -B DenseNet121 \
-  -L CYBORG+REACTIONTIME \
+  -B DualGateDenseNet121 \
+  -L DIFFERENTIABLE_CYBORG+REACTIONTIME \
   -T original_data \
-  --cyborg-loss-alpha 0.5
+  --cyborg-loss-alpha 0.5 \
+  --psych-scaling-constant 0.7 \
+  --use-random-reactiontime normal \
+  --use-wandb-logger true
 ```
 
 You can also run this with [WandB](https://wandb.ai/site). Most of this follows their [PyTorch-Lightning setup](https://docs.wandb.ai/guides/integrations/lightning).
